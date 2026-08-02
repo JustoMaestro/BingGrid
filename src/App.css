@@ -153,3 +153,22 @@ button:disabled {
   color: #374151;
   font-weight: 600;
 }
+
+.call-anim {
+  animation: callPop 450ms ease-out forwards;
+}
+
+@keyframes callPop {
+  0% {
+    background: #7c3aed; /* purple */
+    transform: scale(1.08);
+  }
+  60% {
+    background: #22c55e; /* green */
+    transform: scale(0.7);
+  }
+  100% {
+    background: #22c55e;
+    transform: scale(1);
+  }
+}

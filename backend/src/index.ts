@@ -123,6 +123,10 @@ function getPlayerForSocket(state: GameState, socket: Socket): Player | null {
   return null;
 }
 
+function randomFirst(): Player {
+  return Math.random() < 0.5 ? "p1" : "p2";
+}
+
 // Personalized serialization: opponent grid never sent
 function serializeForPlayer(state: GameState, player: Player) {
   const self = player === "p1" ? state.p1 : state.p2;
@@ -171,7 +175,7 @@ function emitRoomState(state: GameState) {
 function startNewRound(state: GameState) {
   state.called = new Set<number>();
   state.winner = null;
-  state.currentTurn = "p1";
+  state.currentTurn = randomFirst();
 
   state.p1.grid = makeGrid();
   state.p2.grid = makeGrid();
@@ -196,7 +200,7 @@ io.on("connection", (socket) => {
       lastCalled: null,
       roomCode,
       called: new Set<number>(),
-      currentTurn: "p1",
+      currentTurn: randomFirst(),
       winner: null,
       playerSocketId: { p1: socket.id, p2: null },
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
 
@@ -44,6 +44,12 @@ export default function App() {
 
   const [state, setState] = useState<ServerState | null>(null);
 
+  // Animation: track which cells newly became marked
+  const prevMarkedRef = useRef<boolean[] | null>(null);
+  const [animatingCells, setAnimatingCells] = useState<Set<number>>(
+    () => new Set(),
+  );
+
   useEffect(() => {
     socket.connect();
 
@@ -53,12 +59,44 @@ export default function App() {
       setStatus("Room created. Waiting for other player…");
     });
 
-    socket.on("ROOM_JOINED", (data: RoomJoined) => {
-      setPlayer(data.player);
+    socket.on("ROOM_JOINED", (_data: RoomJoined) => {
+      setPlayer(_data.player);
       setStatus("Joined room.");
     });
 
     socket.on("GAME_STATE_UPDATED", (newState: ServerState) => {
+      // ---- compute newly marked cells for animation ----
+      const prev = prevMarkedRef.current;
+      const currMarked = newState.markedCells;
+
+      if (prev) {
+        const newlyMarked = new Set<number>();
+        for (let i = 0; i < currMarked.length; i++) {
+          if (currMarked[i] && !prev[i]) newlyMarked.add(i);
+        }
+
+        if (newlyMarked.size > 0) {
+          // add them to animation set
+          setAnimatingCells((prevSet) => {
+            const merged = new Set(prevSet);
+            for (const idx of newlyMarked) merged.add(idx);
+            return merged;
+          });
+
+          // remove after duration (must match CSS duration: 450ms below)
+          setTimeout(() => {
+            setAnimatingCells((setNow) => {
+              const next = new Set(setNow);
+              for (const idx of newlyMarked) next.delete(idx);
+              return next;
+            });
+          }, 450);
+        }
+      }
+
+      // update ref for next diff
+      prevMarkedRef.current = currMarked;
+
       setState(newState);
       setError(null);
       setRoomCodeShown(newState.roomCode);
@@ -216,7 +254,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/** rematch only after a finished round */}
                 <div className='rematchWrap'>
                   <button
                     className='rematchBtn'
@@ -241,7 +278,7 @@ export default function App() {
               </>
             )}
 
-            {/* called count */}
+            {/* Called */}
             <div className='calledWrap'>
               <div className='calledTitle'>Number called:</div>
               <div className='calledList'>
@@ -258,16 +295,17 @@ export default function App() {
             const value = state.grid[idx];
             const isMarked = state.markedCells[idx];
 
-            // You can only tap on your turn, and only unmarked/un-called numbers.
             const disabled =
               !isMyTurn || !!winner || isMarked || calledSet.has(value);
+
+            const isAnimating = animatingCells.has(idx);
 
             return (
               <button
                 key={idx}
                 className={`cell ${isMarked ? "marked" : ""} ${
                   disabled ? "disabled" : ""
-                }`}
+                } ${isAnimating ? "call-anim" : ""}`}
                 disabled={disabled}
                 onClick={() => {
                   if (!isMyTurn || !player || winner) return;
@@ -278,9 +316,9 @@ export default function App() {
                     number: value,
                   });
                 }}
-                aria-label={`Cell ${Math.floor(idx / N) + 1},${
-                  (idx % N) + 1
-                }: ${value}${isMarked ? " marked" : ""}`}
+                aria-label={`Cell ${Math.floor(idx / N) + 1},${(idx % N) + 1}: ${value}${
+                  isMarked ? " marked" : ""
+                }`}
               >
                 {value}
               </button>
