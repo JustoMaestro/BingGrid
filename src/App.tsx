@@ -12,7 +12,7 @@ type ServerState = {
   winner: Winner;
 
   called: number[];
-  lastCalled: number | null; // <-- add this
+  lastCalled: number | null;
 
   grid: number[];
   markedCells: boolean[];
