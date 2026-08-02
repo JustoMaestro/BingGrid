@@ -3,16 +3,18 @@ import { io } from "socket.io-client";
 import "./App.css";
 
 type Player = "p1" | "p2";
+type Winner = Player | "tie" | null;
 
 type ServerState = {
   rematchReady?: { self: boolean; opponent: boolean };
   roomCode: string;
   currentTurn: Player;
-  winner: Player | null;
+  winner: Winner;
 
-  called: number[]; // shared called list
+  called: number[];
+  lastCalled: number | null; // <-- add this
 
-  grid: number[]; // ONLY your grid
+  grid: number[];
   markedCells: boolean[];
 
   self: { name: string | null; score: number };
@@ -31,10 +33,10 @@ export default function App() {
   const socket = useMemo(() => io(apiUrl, { autoConnect: false }), [apiUrl]);
 
   const [status, setStatus] = useState("Connecting…");
-  console.log(status);
   const [error, setError] = useState<string | null>(null);
 
   const [player, setPlayer] = useState<Player | null>(null);
+
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [roomCodeShown, setRoomCodeShown] = useState<string | null>(null);
 
@@ -61,9 +63,12 @@ export default function App() {
       setError(null);
       setRoomCodeShown(newState.roomCode);
 
-      if (newState.winner)
-        setStatus("Winner: " + newState.winner.toUpperCase());
-      else setStatus(newState.currentTurn === "p1" ? "P1 turn" : "P2 turn");
+      if (newState.winner) {
+        if (newState.winner === "tie") setStatus("It's a tie!");
+        else setStatus(`Winner: ${newState.winner.toUpperCase()}`);
+      } else {
+        setStatus(newState.currentTurn === "p1" ? "P1 turn" : "P2 turn");
+      }
     });
 
     socket.on("ERROR", (e: ErrorEvent) => {
@@ -71,8 +76,8 @@ export default function App() {
       setStatus("Error");
     });
 
-    socket.on("connect_error", (e: Error) => {
-      setError(e.message);
+    socket.on("connect_error", (e: any) => {
+      setError(String(e?.message ?? e));
       setStatus("Socket connect error");
     });
 
@@ -92,6 +97,7 @@ export default function App() {
     setError(null);
     const code = roomCodeInput.trim();
     if (!code) return;
+
     const trimmed = name.trim();
     socket.emit("JOIN_ROOM", {
       roomCode: code,
@@ -104,11 +110,10 @@ export default function App() {
     [state?.called],
   );
 
-  function displayName(p: Player | "self" | "opponent") {
-    if (!state) return String(p).toUpperCase();
-    if (p === "self") return (state.self.name ?? "YOU").trim();
-    if (p === "opponent") return (state.opponent.name ?? "OPPONENT").trim();
-    return p.toUpperCase();
+  function displayName(p: "self" | "opponent"): string {
+    if (!state) return p.toUpperCase();
+    if (p === "self") return (state.self.name ?? "YOU").trim() || "YOU";
+    return (state.opponent.name ?? "OPPONENT").trim() || "OPPONENT";
   }
 
   const isMyTurn = state && player ? state.currentTurn === player : false;
@@ -119,31 +124,30 @@ export default function App() {
       <h1>Bingo Grid</h1>
 
       <div className='panel'>
+        <div>Status: {status}</div>
         {error && <div className='error'>{error}</div>}
 
         {!player && (
-          <>
-            <div className='yourName'>
+          <div className='roomRow'>
+            <div className='join'>
+              <input
+                placeholder='Room code'
+                value={roomCodeInput}
+                onChange={(e) => setRoomCodeInput(e.target.value)}
+              />
+              <button onClick={joinRoom}>Join</button>
+            </div>
+
+            <div className='join'>
               <input
                 placeholder='Your name'
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
-            <div className='roomRow'>
-              <div className='join'>
-                <input
-                  placeholder='Room code'
-                  value={roomCodeInput}
-                  onChange={(e) => setRoomCodeInput(e.target.value)}
-                />
-                <button onClick={joinRoom}>Join</button>
-              </div>
-            </div>
-            <div style={{ marginTop: "10px" }}>
-              <button onClick={createRoom}>Create Room</button>
-            </div>
-          </>
+
+            <button onClick={createRoom}>Create Room</button>
+          </div>
         )}
 
         {player && state && (
@@ -166,7 +170,7 @@ export default function App() {
                   }
                 }}
               >
-                {/* simple inline copy icon (no deps) */}
+                {/* copy icon */}
                 <svg
                   width='18'
                   height='18'
@@ -199,32 +203,49 @@ export default function App() {
               </div>
             </div>
 
-            {winner && state && (
-              <div className='rematchWrap'>
-                <button
-                  className='rematchBtn'
-                  onClick={() => {
-                    socket?.emit("REMATCH_READY", { roomCode: state.roomCode });
-                  }}
-                  disabled={state.rematchReady?.self === true}
-                >
-                  {state.rematchReady?.self ? "Rematch ready ✅" : "Rematch"}
-                </button>
+            {/* Winner / rematch */}
+            {winner && (
+              <>
+                {winner === "tie" ? (
+                  <div className='winner'>🤝 It's a tie!</div>
+                ) : winner === player ? (
+                  <div className='winner'>🏆 You win!</div>
+                ) : (
+                  <div className='winner'>
+                    🏆 {displayName("opponent")} wins!
+                  </div>
+                )}
 
-                <div className='rematchStatus'>
-                  {state.rematchReady
-                    ? state.rematchReady.opponent
-                      ? "Opponent is ready ✅"
-                      : "Waiting for opponent…"
-                    : "Waiting…"}
+                {/** rematch only after a finished round */}
+                <div className='rematchWrap'>
+                  <button
+                    className='rematchBtn'
+                    onClick={() => {
+                      socket.emit("REMATCH_READY", {
+                        roomCode: state.roomCode,
+                      });
+                    }}
+                    disabled={state.rematchReady?.self === true}
+                  >
+                    {state.rematchReady?.self ? "Rematch ready ✅" : "Rematch"}
+                  </button>
+
+                  <div className='rematchStatus'>
+                    {state.rematchReady
+                      ? state.rematchReady.opponent
+                        ? "Opponent is ready ✅"
+                        : "Waiting for opponent…"
+                      : "Waiting…"}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
 
+            {/* called count */}
             <div className='calledWrap'>
               <div className='calledTitle'>Number called:</div>
               <div className='calledList'>
-                {state.called.length === 0 ? "None yet" : state.called.length}
+                {state.lastCalled == null ? "None yet" : state.lastCalled}
               </div>
             </div>
           </>
@@ -237,13 +258,16 @@ export default function App() {
             const value = state.grid[idx];
             const isMarked = state.markedCells[idx];
 
+            // You can only tap on your turn, and only unmarked/un-called numbers.
             const disabled =
               !isMyTurn || !!winner || isMarked || calledSet.has(value);
 
             return (
               <button
                 key={idx}
-                className={`cell ${isMarked ? "marked" : ""} ${disabled ? "disabled" : ""}`}
+                className={`cell ${isMarked ? "marked" : ""} ${
+                  disabled ? "disabled" : ""
+                }`}
                 disabled={disabled}
                 onClick={() => {
                   if (!isMyTurn || !player || winner) return;
@@ -254,9 +278,9 @@ export default function App() {
                     number: value,
                   });
                 }}
-                aria-label={`Cell ${Math.floor(idx / N) + 1},${(idx % N) + 1}: ${value}${
-                  isMarked ? " marked" : ""
-                }`}
+                aria-label={`Cell ${Math.floor(idx / N) + 1},${
+                  (idx % N) + 1
+                }: ${value}${isMarked ? " marked" : ""}`}
               >
                 {value}
               </button>
