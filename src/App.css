@@ -158,6 +158,65 @@ button:disabled {
   animation: callPop 450ms ease-out forwards;
 }
 
+.chatWrap {
+  margin-top: 12px;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.chatTitle {
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.chatMessages {
+  height: 140px;
+  overflow: auto;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.chatEmpty {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.chatMsg {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.chatFrom {
+  font-weight: 800;
+  margin-right: 6px;
+}
+
+.chatInputRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chatInputRow input {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.chatInputRow button {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 0;
+  background: #2563eb;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 @keyframes callPop {
   0% {
     background: #7c3aed; /* purple */

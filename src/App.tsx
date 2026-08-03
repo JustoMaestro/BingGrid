@@ -5,6 +5,13 @@ import "./App.css";
 type Player = "p1" | "p2";
 type Winner = Player | "tie" | null;
 
+type ChatMessage = {
+  roomCode: string;
+  from: string;
+  text: string;
+  timestamp: number;
+};
+
 type ServerState = {
   rematchReady?: { self: boolean; opponent: boolean };
   roomCode: string;
@@ -30,6 +37,9 @@ const N = 5;
 export default function App() {
   const apiUrl = import.meta.env.VITE_API_URL as string;
 
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatText, setChatText] = useState("");
+
   const socket = useMemo(() => io(apiUrl, { autoConnect: false }), [apiUrl]);
 
   const [status, setStatus] = useState("Connecting…");
@@ -44,6 +54,9 @@ export default function App() {
 
   const [state, setState] = useState<ServerState | null>(null);
 
+  // track current room code for chat filtering (prevents stale closure)
+  const roomCodeRef = useRef<string | null>(null);
+
   // Animation: track which cells newly became marked
   const prevMarkedRef = useRef<boolean[] | null>(null);
   const [animatingCells, setAnimatingCells] = useState<Set<number>>(
@@ -53,15 +66,29 @@ export default function App() {
   useEffect(() => {
     socket.connect();
 
+    socket.on("CHAT_RECEIVED", (msg: ChatMessage) => {
+      const currentRoom = roomCodeRef.current;
+      if (!currentRoom) return;
+      if (msg.roomCode !== currentRoom) return;
+
+      setChatMessages((prev) => [...prev, msg]);
+    });
+
     socket.on("ROOM_CREATED", (data: RoomCreated) => {
       setPlayer(data.player);
       setRoomCodeShown(data.roomCode);
       setStatus("Room created. Waiting for other player…");
+
+      // reset chat only when creating a new room
+      setChatMessages([]);
     });
 
     socket.on("ROOM_JOINED", (_data: RoomJoined) => {
       setPlayer(_data.player);
       setStatus("Joined room.");
+
+      // reset chat only when joining a new room
+      setChatMessages([]);
     });
 
     socket.on("GAME_STATE_UPDATED", (newState: ServerState) => {
@@ -76,14 +103,12 @@ export default function App() {
         }
 
         if (newlyMarked.size > 0) {
-          // add them to animation set
           setAnimatingCells((prevSet) => {
             const merged = new Set(prevSet);
             for (const idx of newlyMarked) merged.add(idx);
             return merged;
           });
 
-          // remove after duration (must match CSS duration: 450ms below)
           setTimeout(() => {
             setAnimatingCells((setNow) => {
               const next = new Set(setNow);
@@ -94,12 +119,14 @@ export default function App() {
         }
       }
 
-      // update ref for next diff
       prevMarkedRef.current = currMarked;
 
       setState(newState);
       setError(null);
       setRoomCodeShown(newState.roomCode);
+
+      // keep room code ref in sync so chat doesn't rely on stale state closure
+      roomCodeRef.current = newState.roomCode;
 
       if (newState.winner) {
         if (newState.winner === "tie") setStatus("It's a tie!");
@@ -289,6 +316,7 @@ export default function App() {
         )}
       </div>
 
+      {/* Grid */}
       {state && (
         <div className='grid' role='grid' aria-label='Your Bingo grid'>
           {Array.from({ length: 25 }, (_, idx) => {
@@ -316,14 +344,62 @@ export default function App() {
                     number: value,
                   });
                 }}
-                aria-label={`Cell ${Math.floor(idx / N) + 1},${(idx % N) + 1}: ${value}${
-                  isMarked ? " marked" : ""
-                }`}
+                aria-label={`Cell ${Math.floor(idx / N) + 1},${
+                  (idx % N) + 1
+                }: ${value}${isMarked ? " marked" : ""}`}
               >
                 {value}
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Chat */}
+      {player && state && (
+        <div className='chatWrap'>
+          <div className='chatTitle'>Chat</div>
+
+          <div className='chatMessages' role='log' aria-label='Chat messages'>
+            {chatMessages.length === 0 ? (
+              <div className='chatEmpty'>Say hi 👋</div>
+            ) : (
+              chatMessages.map((m, i) => (
+                <div key={`${m.timestamp}-${i}`} className='chatMsg'>
+                  <span className='chatFrom'>{m.from}:</span>{" "}
+                  <span className='chatText'>{m.text}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className='chatInputRow'>
+            <input
+              value={chatText}
+              onChange={(e) => setChatText(e.target.value)}
+              placeholder='Type a message…'
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  socket.emit("CHAT_SEND", {
+                    roomCode: state.roomCode,
+                    text: chatText,
+                  });
+                  setChatText("");
+                }
+              }}
+            />
+            <button
+              onClick={() => {
+                socket.emit("CHAT_SEND", {
+                  roomCode: state.roomCode,
+                  text: chatText,
+                });
+                setChatText("");
+              }}
+            >
+              Send
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -5,6 +5,12 @@ import { Server, Socket } from "socket.io";
 
 type Player = "p1" | "p2";
 type Winner = Player | "tie" | null;
+type ChatMessage = {
+  roomCode: string;
+  from: string;
+  text: string;
+  timestamp: number;
+};
 
 const N = 5;
 const SIZE = N * N; // 25
@@ -192,6 +198,33 @@ function startNewRound(state: GameState) {
 // ---- Socket events ----
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
+
+  socket.on(
+    "CHAT_SEND",
+    ({ roomCode, text }: { roomCode: string; text: string }) => {
+      const state = rooms.get(roomCode);
+      if (!state) return;
+
+      // must be one of the players
+      const player = getPlayerForSocket(state, socket);
+      if (!player) return;
+
+      const safeText = text.trim();
+      if (!safeText) return;
+      if (safeText.length > 200) return;
+
+      const fromName =
+        (player === "p1" ? state.p1.name : state.p2.name) ??
+        player.toUpperCase();
+
+      io.to(roomCode).emit("CHAT_RECEIVED", {
+        roomCode,
+        from: fromName,
+        text: safeText,
+        timestamp: Date.now(),
+      });
+    },
+  );
 
   socket.on("CREATE_ROOM", ({ name }: { name?: string } = {}) => {
     const roomCode = makeRoomCode();
