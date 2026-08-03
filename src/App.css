@@ -21,6 +21,7 @@
   background: #f6f7fb;
   padding: 12px;
   border-radius: 12px;
+  font-size: 14px;
 }
 
 .iconBtn {
@@ -85,8 +86,7 @@ button:disabled {
 
 .scores {
   display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
+  justify-content: center;
   gap: 10px;
 }
 
@@ -215,6 +215,24 @@ button:disabled {
   color: white;
   font-weight: 800;
   cursor: pointer;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+}
+
+.statusText {
+  font-weight: 700;
+}
+
+.errorSlot {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
 }
 
 @keyframes callPop {

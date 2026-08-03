@@ -78,6 +78,7 @@ export default function App() {
       setPlayer(data.player);
       setRoomCodeShown(data.roomCode);
       setStatus("Room created. Waiting for other player…");
+      setError(null);
 
       // reset chat only when creating a new room
       setChatMessages([]);
@@ -86,6 +87,7 @@ export default function App() {
     socket.on("ROOM_JOINED", (_data: RoomJoined) => {
       setPlayer(_data.player);
       setStatus("Joined room.");
+      setError(null);
 
       // reset chat only when joining a new room
       setChatMessages([]);
@@ -189,8 +191,51 @@ export default function App() {
       <h1>Bingo Grid</h1>
 
       <div className='panel'>
-        <div>Status: {status}</div>
-        {error && <div className='error'>{error}</div>}
+        {/* Status + Room code on the same line */}
+        <div className='topBar'>
+          <div className='statusText'>Status: {status}</div>
+          {error ? <div className='error'>{error}</div> : null}
+
+          {player && state ? (
+            <div className='roomCodeLine'>
+              Room code: <b>{roomCodeShown ?? state.roomCode}</b>
+              <button
+                className='iconBtn'
+                title='Copy room code'
+                aria-label='Copy room code'
+                onClick={async () => {
+                  const code = roomCodeShown ?? state.roomCode;
+                  try {
+                    await navigator.clipboard.writeText(code);
+                  } catch {
+                    // ignore
+                  }
+                }}
+              >
+                <svg
+                  width='18'
+                  height='18'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  aria-hidden='true'
+                >
+                  <path
+                    d='M8 7.5V6.6C8 5.716 8.716 5 9.6 5H18.4C19.284 5 20 5.716 20 6.6V15.4C20 16.284 19.284 17 18.4 17H17.5'
+                    stroke='currentColor'
+                    strokeWidth='2'
+                    strokeLinecap='round'
+                  />
+                  <path
+                    d='M6.6 7H15.4C16.284 7 17 7.716 17 8.6V17.4C17 18.284 16.284 19 15.4 19H6.6C5.716 19 5 18.284 5 17.4V8.6C5 7.716 5.716 7 6.6 7Z'
+                    stroke='currentColor'
+                    strokeWidth='2'
+                    strokeLinejoin='round'
+                  />
+                </svg>
+              </button>
+            </div>
+          ) : null}
+        </div>
 
         {!player && (
           <div className='roomRow'>
@@ -217,48 +262,7 @@ export default function App() {
 
         {player && state && (
           <>
-            <div className='roomCodeRow'>
-              <div className='roomCode'>
-                Room code: <b>{roomCodeShown ?? state.roomCode}</b>
-              </div>
-
-              <button
-                className='iconBtn'
-                title='Copy room code'
-                aria-label='Copy room code'
-                onClick={async () => {
-                  const code = roomCodeShown ?? state.roomCode;
-                  try {
-                    await navigator.clipboard.writeText(code);
-                  } catch {
-                    // ignore
-                  }
-                }}
-              >
-                {/* copy icon */}
-                <svg
-                  width='18'
-                  height='18'
-                  viewBox='0 0 24 24'
-                  fill='none'
-                  aria-hidden='true'
-                >
-                  <path
-                    d='M8 7.5V6.6C8 5.716 8.716 5 9.6 5H18.4C19.284 5 20 5.716 20 6.6V15.4C20 16.284 19.284 17 18.4 17H17.5'
-                    stroke='currentColor'
-                    strokeWidth='2'
-                    strokeLinecap='round'
-                  />
-                  <path
-                    d='M6.6 7H15.4C16.284 7 17 7.716 17 8.6V17.4C17 18.284 16.284 19 15.4 19H6.6C5.716 19 5 18.284 5 17.4V8.6C5 7.716 5.716 7 6.6 7Z'
-                    stroke='currentColor'
-                    strokeWidth='2'
-                    strokeLinejoin='round'
-                  />
-                </svg>
-              </button>
-            </div>
-
+            {/* Scores */}
             <div className='scores'>
               <div className={state.currentTurn === player ? "turn" : ""}>
                 {displayName("self")}: {state.self.score}
@@ -325,7 +329,6 @@ export default function App() {
 
             const disabled =
               !isMyTurn || !!winner || isMarked || calledSet.has(value);
-
             const isAnimating = animatingCells.has(idx);
 
             return (
@@ -344,9 +347,9 @@ export default function App() {
                     number: value,
                   });
                 }}
-                aria-label={`Cell ${Math.floor(idx / N) + 1},${
-                  (idx % N) + 1
-                }: ${value}${isMarked ? " marked" : ""}`}
+                aria-label={`Cell ${Math.floor(idx / N) + 1},${(idx % N) + 1}: ${value}${
+                  isMarked ? " marked" : ""
+                }`}
               >
                 {value}
               </button>
